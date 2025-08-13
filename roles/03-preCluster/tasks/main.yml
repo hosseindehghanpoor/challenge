@@ -1,0 +1,10 @@
+---
+- name: lets create inventory file for the successor tasks
+  template:
+    src: "{{ role_path }}/files/inventory_template.j2"
+    dest: "{{ role_path }}/files/inventory.yml"
+#this fact is very important to future tasks
+- name: set a new fact to merge ip addresses of the vms with hostvars
+  set_fact:
+    kubekeys: "{{ kubekeys | default({}) | combine({ item: hostvars[item].kubekey | combine({'address': vm_ips[item]}) | combine({'internalAddress': vm_ips[item]}) }) }}"
+  loop: "{{ groups['all'] }}"

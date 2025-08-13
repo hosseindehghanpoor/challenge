@@ -1,0 +1,81 @@
+---
+#here is important to check not run elk multiple times
+- name: Lets check if ELK is already installedd
+  ansible.builtin.shell: |
+    kubectl get statefulset elasticsearch-master -n elastic-system -o json \ 
+    | jq -e 'select(.status.availableReplicas == 1 and .status.readyReplicas == 1)'
+  register: elk_status
+  changed_when: false
+  failed_when: false
+  when: hostvars[inventory_hostname].master | default(false)
+#elk is installed here
+- name: Installing ELK using HELM
+  ansible.builtin.shell: helm upgrade --install elasticsearch /root/elk/elasticsearch --namespace elastic-system --create-namespace
+  args:
+    chdir: /root/
+  when: 
+    - hostvars[inventory_hostname].master | default(false)
+    - elk_status.rc != 0
+#its important to have up and running elk because of the future tasks
+- name: Lets wait until ELK is readyy
+  ansible.builtin.shell: |
+    kubectl get statefulset elasticsearch-master -n elastic-system -o json \ 
+    | jq -e 'select(.status.availableReplicas == 1 and .status.readyReplicas == 1)'
+  register: elk_status
+  changed_when: false
+  failed_when: false
+  until: elk_status.rc == 0
+  retries: 30
+  delay: 20
+  when: hostvars[inventory_hostname].master | default(false)
+#file beat is installed to collect all the logs
+- name: Installing FileBeat using HELM
+  ansible.builtin.shell: helm upgrade --install filebeat /root/elk/filebeat --namespace elastic-system
+  args:
+    chdir: /root/
+  when: hostvars[inventory_hostname].master | default(false)
+
+#here we check if kibana is already installed
+- name: check if kibana is already installed and ready
+  ansible.builtin.shell: |
+    kubectl get deployments -n elastic-system kibana-kibana -o json \
+    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+  register: kibana_status
+  changed_when: false
+  failed_when: false
+  when: hostvars[inventory_hostname].master | default(false)
+#kibana installation is happend here
+- name: Installing KibAna using HELM
+  ansible.builtin.shell: helm upgrade --install kibana /root/elk/kibana --namespace elastic-system --set service.nodePort={{ kibana_port  }}
+  args:
+    chdir: /root/
+  when:
+    - hostvars[inventory_hostname].master | default(false)
+    - kibana_status.rc != 0
+#here we check if kibana is up because it is important to future tasks
+- name: Lets wait until Kibana is readyy
+  ansible.builtin.shell: |
+    kubectl get deployments -n elastic-system kibana-kibana -o json \
+    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+  register: kibana_status
+  until: kibana_status.rc == 0
+  retries: 30
+  delay: 20
+  changed_when: false
+  failed_when: false
+  when: hostvars[inventory_hostname].master | default(false)
+#we need to get the secrets of elastic in oder to send some requests to kibana to create dash or filters
+- name: Retrieve encoded password from Kubernetes secret
+  ansible.builtin.command: >
+    kubectl get secret elasticsearch-master-credentials
+    --namespace=elastic-system
+    -o jsonpath='{.data.password}'
+  register: encoded_password
+  run_once: true
+  changed_when: false
+  when: hostvars[inventory_hostname].master | default(false)
+#password is set as a fact here
+- name: Set kibana_password fact (decoded)
+  ansible.builtin.set_fact:
+    kibana_password: "{{ encoded_password.stdout | b64decode }}"
+  when: encoded_password.stdout is defined and encoded_password.stdout != ""

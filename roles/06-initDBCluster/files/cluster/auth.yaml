@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-postgis-db
+  namespace: db
+type: kubernetes.io/basic-auth
+stringData:
+  username: myapp
+  password: GVxDFdsQWeCxasdfDGfddsDS2SS

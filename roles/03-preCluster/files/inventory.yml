@@ -1,0 +1,21 @@
+all:
+  hosts:
+    vm1:
+      ansible_host: 192.168.168.237
+      ansible_user: root
+      ansible_ssh_private_key_file: /root/.ssh/SivanLocalServersKey
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -p 22'
+      ansible_port: 22
+      master: true
+    vm2:
+      ansible_host: 192.168.168.238
+      ansible_user: root
+      ansible_ssh_private_key_file: /root/.ssh/SivanLocalServersKey
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -p 22'
+      ansible_port: 22
+    vm3:
+      ansible_host: 192.168.168.239
+      ansible_user: root
+      ansible_ssh_private_key_file: /root/.ssh/SivanLocalServersKey
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -p 22'
+      ansible_port: 22

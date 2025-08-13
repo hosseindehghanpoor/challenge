@@ -1,0 +1,56 @@
+apiVersion: kubekey.kubesphere.io/v1alpha2
+kind: Cluster
+metadata:
+  name: sample
+spec:
+  hosts:
+  - name: vm1
+    address: 192.168.168.237
+    internalAddress: 192.168.168.237
+    user: root
+    password: root
+    port: 22
+  - name: vm2
+    address: 192.168.168.238
+    internalAddress: 192.168.168.238
+    user: root
+    password: root
+    port: 22
+  - name: vm3
+    address: 192.168.168.239
+    internalAddress: 192.168.168.239
+    user: root
+    password: root
+    port: 22
+  roleGroups:
+    etcd:
+    - vm1
+    control-plane:
+    - vm1
+    worker:
+    - vm2
+    - vm3
+  controlPlaneEndpoint:
+    domain: lb.kubesphere.local
+    address: ""
+    port: 6443
+  kubernetes:
+    version: v1.28.0
+    clusterName: cluster.local
+    autoRenewCerts: true
+    containerManager: containerd
+  etcd:
+    type: kubekey
+  network:
+    plugin: calico
+    kubePodsCIDR: 10.233.64.0/18
+    kubeServiceCIDR: 10.233.0.0/18
+    multusCNI:
+      enabled: false
+  registry:
+    privateRegistry: "docker.arvancloud.ir"
+    namespaceOverride: ""
+    registryMirrors: []
+    insecureRegistries: []
+  addons: []
+

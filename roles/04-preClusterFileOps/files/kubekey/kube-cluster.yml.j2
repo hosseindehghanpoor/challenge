@@ -1,0 +1,57 @@
+apiVersion: kubekey.kubesphere.io/v1alpha2
+kind: Cluster
+metadata:
+  name: sample
+spec:
+  hosts:
+{% for host in groups['all'] %}
+  - name: {{ host }}
+    address: {{ hostvars[host].ansible_host }}
+    internalAddress: {{ hostvars[host].ansible_host }}
+    user: {{hostvars[host].kubekey.user}}
+    password: {{hostvars[host].kubekey.pass}}
+    port: 22
+{% endfor %}
+  roleGroups:
+    etcd:
+{% for host in groups['all'] %}
+{% if hostvars[host].kubekey.master is defined and hostvars[host].kubekey.master %}
+    - {{host}}
+{% endif %}
+{% endfor %}
+    control-plane:
+{% for host in groups['all'] %}
+{% if hostvars[host].kubekey.master is defined and hostvars[host].kubekey.master %}
+    - {{host}}
+{% endif %}
+{% endfor %}
+    worker:
+{% for host in groups['all'] %}
+{% if hostvars[host].kubekey.worker is defined and hostvars[host].kubekey.worker %}
+    - {{host}}
+{% endif %}
+{% endfor %}
+  controlPlaneEndpoint:
+    domain: lb.kubesphere.local
+    address: ""
+    port: 6443
+  kubernetes:
+    version: v1.28.0
+    clusterName: cluster.local
+    autoRenewCerts: true
+    containerManager: containerd
+  etcd:
+    type: kubekey
+  network:
+    plugin: calico
+    kubePodsCIDR: 10.233.64.0/18
+    kubeServiceCIDR: 10.233.0.0/18
+    multusCNI:
+      enabled: false
+  registry:
+    privateRegistry: "docker.arvancloud.ir"
+    namespaceOverride: ""
+    registryMirrors: []
+    insecureRegistries: []
+  addons: []
+

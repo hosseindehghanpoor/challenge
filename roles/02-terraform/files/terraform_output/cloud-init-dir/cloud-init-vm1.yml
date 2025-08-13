@@ -1,0 +1,34 @@
+#cloud-config
+
+# sets the hostname to 'terraformed'
+hostname: ansibel-vm1
+disable_root: false
+users:
+# Adds a user called 'example' with the password hash of 'passwort', sudo rights and the default ubuntu groups
+        - name: example
+          passwd: $6$rounds=4096$P0uvlB9.8nsiY67$uuOxYSk6n/74Ds3JtV1mT6xYjOguwTWgNmOeHvcHiQa9zan57l8dvfHE/zlu19fDmJGySNzLmh6K0R2I1AU9o0
+          lock_passwd: false
+          sudo: ALL=(ALL:ALL) ALL
+          groups: [adm, audio, cdrom, dialout, floppy, video, plugdev, dip, netdev]
+          ssh_authorized_keys:
+            - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNwJWX9jkhpYoF9lC2Ijn8adi1ll1c1yIxkf6MgrwcY this is for IaC"
+          shell: /bin/bash
+ssh_pwauth: true
+  #chpasswd:
+  #  list: |
+  #    root: $6$YTQ5wVgA81DdIWhG$f2pK6SU0VpHB3SuhPKIxSWW9G1QIphd/J1lChMwWNAAY0MUjCFgNEdLFEgtVjqaqw9SjRW80PM9SDaI.g8Q.H/
+  #  expire: false
+ssh_authorized_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNwJWX9jkhpYoF9lC2Ijn8adi1ll1c1yIxkf6MgrwcY this is for IaC"
+runcmd:
+  - echo "initialization is done"
+  - echo "root:root" | chpasswd
+  - sed -i 's/^#*PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+    #- systemctl restart sshd #this service is not exists so it is not useful
+  - systemctl restart ssh
+package_update: true
+package_upgrade: true
+packages:
+  - socat
+  - conntrack
+

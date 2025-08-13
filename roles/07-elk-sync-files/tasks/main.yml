@@ -1,0 +1,10 @@
+#all elk component are copied to installed.
+---
+- name: Copy ELK component to master node
+  ansible.builtin.synchronize:
+    src: "{{ role_path }}/files/elk"
+    dest: /root
+    recursive: yes
+    rsync_opts:
+      - "--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
+  when: hostvars[inventory_hostname].master | default(false)

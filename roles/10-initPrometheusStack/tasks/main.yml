@@ -1,0 +1,108 @@
+#here prometheus is going to be installed using helm
+- name: init prometheus stack helm (add repo)
+  shell: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+- name: init prometheus stack helm (update repo)
+  shell: helm repo update
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#there is a file which i use them to override some data in helm chart
+- name: generate prometheus values file configuration from template
+  template:
+    src: "{{ role_path }}/files/prometheusStack/values.yml.j2"
+    dest: "{{ role_path }}/files/prometheusStack/values.yml"
+  vars:
+    hostvars: "{{kubekeys}}"
+  delegate_to: localhost
+  run_once: true
+  become: false
+#its important to enable etcd to expose its metrics
+- name: Ensure ETCD_LISTEN_METRICS_URLS is set in /etc/etcd.env
+  lineinfile:
+    path: /etc/etcd.env
+    regexp: '^ETCD_LISTEN_METRICS_URLS='
+    line: ETCD_LISTEN_METRICS_URLS=http://0.0.0.0:2381
+    state: present
+    backup: yes
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#etcd service is restarted
+- name: Restart etcd
+  systemd:
+    name: etcd.service
+    state: restarted
+    daemon_reload: yes
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#value file is copied here
+- name: Copy prometheusStack values yaml file
+  ansible.builtin.synchronize:
+    src: "{{ role_path }}/files/prometheusStack"
+    dest: /root
+    recursive: yes
+    rsync_opts:
+      - "--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#kubeproxy metrics will be exposed 
+- name: add new value for kube proxy metrics 
+  shell: |
+    kubectl -n kube-system get configmap kube-proxy -o yaml | \
+    sed -r 's|(^\s*metricsBindAddress:).*|\1 "0.0.0.0:10249"|' | \
+    kubectl apply -f -
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#kubeproxy daemonset is restarted
+- name: restart ds kube proxy 
+  command: kubectl -n kube-system rollout restart daemonset/kube-proxy
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#create ns for monitoring
+- name: Check if namespace {{ monitoring_namespace }} exists
+  shell: kubectl get ns {{ monitoring_namespace }}
+  register: ns_mon_check
+  ignore_errors: true
+  changed_when: false
+  failed_when: false
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+- name: Create namespace {{ monitoring_namespace }} if not exists
+  shell: kubectl create ns {{ monitoring_namespace }}
+  when:
+    - hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+    - ns_mon_check.rc != 0
+#etcd secrets will be used by prometheus to scrape data
+- name: create  etcd secret in Kubernetes in monitoring namespace
+  shell: |
+    kubectl create secret generic etcd-client-cert \
+      -n {{ monitoring_namespace }} \
+      --from-file=etcd-ca={{ etcd_path }}/ca.pem \
+      --from-file=etcd-client={{ etcd_path }}/admin-vm1.pem \
+      --from-file=etcd-client-key={{ etcd_path }}/admin-vm1-key.pem \
+      --dry-run=client -o yaml | kubectl apply -f -
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+#final task prometheus is installed
+- name: installing prometheus-stack
+  shell: |
+    helm upgrade --install {{ prometheus_helm_release_name }} {{ prometheus_helm_chart }} \
+    -n {{ monitoring_namespace }} \
+    -f {{ prometheus_helm_values_file }} \
+    --create-namespace \
+    --set crds.upgradeJob.image.busybox.registry=docker.arvancloud.ir \
+    --set grafana.imageRegistry=docker.arvancloud.ir \
+    --set grafana.sidecar.image.registry=quay.cache.de.taavsystem.ir \
+    --set crds.upgradeJob.image.kubectl.registry=k8s.cache.de.taavsystem.ir \
+    --set kube-state-metrics.image.registry=k8s.cache.de.taavsystem.ir \
+    --set alertmanager.alertmanagerSpec.image.registry=quay.cache.de.taavsystem.ir \
+    --set prometheusOperator.admissionWebhooks.deployment.image.registry=quay.cache.de.taavsystem.ir \
+    --set prometheusOperator.admissionWebhooks.patch.image.registry=k8s.cache.de.taavsystem.ir \
+    --set prometheusOperator.image.registry=quay.cache.de.taavsystem.ir \
+    --set prometheusOperator.prometheusConfigReloader.image.registry=quay.cache.de.taavsystem.ir \
+    --set prometheusOperator.thanosImage.registry=quay.cache.de.taavsystem.ir \
+    --set prometheus.prometheusSpec.image.registry=quay.cache.de.taavsystem.ir \
+    --set thanosRuler.thanosRulerSpec.image.registry=quay.cache.de.taavsystem.ir \
+    --set prometheus-node-exporter.image.registry=quay.cache.de.taavsystem.ir \
+    --set kubeRBACProxy.image.registry=quay.cache.de.taavsystem.ir \
+    --set testFramework.image.registry=docker.arvancloud.ir \
+    --set downloadDashboardsImage.registry=docker.arvancloud.ir \
+    --set initChownData.image.registry=docker.arvancloud.ir \
+    --set sidecar.image.registry=quay.cache.de.taavsystem.ir \
+    --set imageRenderer.image.registry=docker.arvancloud.ir
+
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)

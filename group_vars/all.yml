@@ -1,0 +1,24 @@
+#kibana details are here. port is defined and it will expose kibana as nodePort
+kibana_port: "32350"
+kibana_user: "elastic"
+kibana_password: "IMOJJ0Oxu0yWY988"
+cloud_init_files: "{{ hostvars | selectattr('cloud_init_file', 'defined') | map(attribute='cloud_init_file') | list }}"
+
+#these variables are used for prometheus stack
+monitoring_namespace: "monitoring"
+prometheus_helm_release_name: "prometheus-stack"
+prometheus_helm_chart: "prometheus-community/kube-prometheus-stack"
+prometheus_helm_values_file: "/root/prometheusStack/values.yml"
+#these are real path for etcd secrets
+etcd_path: "/etc/ssl/etcd/ssl"
+etcd_ca_path: "/etc/ssl/etcd/ssl/ca.pem"
+etcd_client_cert_path: "/etc/ssl/etcd/ssl/admin-vm1.pem"     
+etcd_client_key_path: "/etc/ssl/etcd/ssl/admin-vm1-key.pem"
+etcd_source_host: "{{ groups['master'][0] | default('master1') }}"
+etcd_service_name: "etcd"
+etcd_listen_metrics_urls: "http://0.0.0.0:2381"
+#telegram bot which is used to send alerts
+bot_token: 8370696025:AAEXbsoYRsGiUe7zi4qfvVk6anCEtOH7EIo
+chat_id: -1002747305613
+#grafana nodeport
+grafana_nodePort: "32351"

@@ -1,0 +1,45 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: myapp-db
+  namespace: db
+spec:
+  instances: 3
+
+  primaryUpdateStrategy: unsupervised
+  # imageName: hub.zimafarda.ir:5000/base/postgres/postgis:16-3.4
+  bootstrap:
+    initdb:
+      database: myapp
+      owner: myapp
+      secret:
+        name: auth-postgis-db
+  postgresql:
+    parameters:
+      shared_buffers: "200MB"
+
+  resources:
+    requests:
+      memory: "250Mi"
+      cpu: 250m
+#  backup:
+#    barmanObjectStore:
+#      destinationPath: s3://database/
+#      endpointURL: http://minio.database-backup.svc.cluster.local:80
+#      s3Credentials:
+#        accessKeyId:
+#          name: minio-creds
+#          key: CONSOLE_ACCESS_KEY
+#        secretAccessKey:
+#          name: minio-creds
+#          key: CONSOLE_SECRET_KEY
+#      wal:
+#        compression: gzip
+#        maxParallel: 2
+
+  storage:
+    storageClass: openebs-hostpath
+    size: 10Gi
+      #  monitoring:
+    #    enablePodMonitor: true
+

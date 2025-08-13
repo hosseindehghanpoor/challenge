@@ -1,0 +1,225 @@
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "telegram-channel"
+      group_by: ["alertname"]
+      group_wait: 20s
+      group_interval: 4m
+      repeat_interval: 4h
+      routes:
+        - receiver: "telegram-channel"
+          matchers:
+            - severity="critical"
+        - receiver: "telegram-channel"
+          matchers:
+            - severity="warning"
+        - receiver: "telegram-channel"
+
+    receivers:
+      - name: "telegram-channel"
+        telegram_configs:
+          - bot_token: {{ bot_token }}
+            api_url: https://api.telegram.org
+            chat_id: {{ chat_id }}
+            parse_mode: "HTML"
+            {% raw %}message: '{{ template "telegram.custom.message" . }}'
+            send_resolved: true{% endraw %}
+
+            # http_config:
+            #   proxy_url: "http://proxy-url"
+            
+
+    templates:
+      - "/etc/alertmanager/config/*.tmpl"
+  {% raw %}
+  templateFiles:
+    template_1.tmpl: |
+      {{ define "__alert_details" }}
+      <b>{{ .Labels.alertname }}</b>
+      {{- if .Labels.severity }}
+      🔖 <b>Severity:</b> <code>{{ .Labels.severity }}</code>
+      {{ end }}
+      🕒 <b>Starts At:</b> {{ .StartsAt }}
+      {{- if .EndsAt }}
+      ⏹ <b>Ends At:</b> {{ .EndsAt }}
+      {{ end }}
+      {{- if .Annotations.summary }}
+      📝 <b>Summary:</b> {{ .Annotations.summary }}
+      {{ end }}
+      {{- if .Annotations.description }}
+      📖 <b>Description:</b> {{ .Annotations.description }}
+      {{ end }}
+      🏷 <b>Labels:</b>
+      {{ range .Labels.SortedPairs }}- <i>{{ .Name }}</i>: <code>{{ .Value }}</code>
+      {{ end }}
+      {{ end }}
+
+      {{ define "telegram.custom.message" }}
+      {{ if gt (len .Alerts.Firing) 0 }}
+      <b>🔥 Alerts Firing ({{ len .Alerts.Firing }}) 🔥</b>
+      {{ range .Alerts.Firing }}
+      {{ template "__alert_details" . }}
+      {{ end }}
+      {{ end }}
+      {{ if gt (len .Alerts.Resolved) 0 }}
+      <b>✅ Alerts Resolved ({{ len .Alerts.Resolved }}) ✅</b>
+      {{ range .Alerts.Resolved }}
+      {{ template "__alert_details" . }}
+      {{ end }}
+      {{ end }}
+      {{ end }}
+{% endraw %}
+
+  ingress:
+    enabled: false
+
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: openebs-hostpath
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+grafana:
+  defaultDashboardsTimezone: Asia/Tehran
+  adminPassword: YqjVQnpzceRPZMSN4UpXsdqwdq2myqppgwp2FK
+  initChownData:
+    enabled: false
+  ingress:
+    enabled: false
+  service:
+    enabled: true
+    type: NodePort
+    port: 80
+    targetPort: 3000
+    nodePort: {{ grafana_nodePort }}
+
+  persistence:
+    type: pvc
+    enabled: true
+    storageClassName: openebs-hostpath
+    accessModes: ["ReadWriteOnce"]
+    size: 5Gi
+    finalizers:
+      - kubernetes.io/pvc-protection
+
+kubeControllerManager:
+  service:
+    port: 10257
+    targetPort: 10257
+  serviceMonitor:
+    enabled: true
+    https: true
+    insecureSkipVerify: true
+
+kubeEtcd:
+  enabled: true
+  endpoints:
+{% for host in groups['all'] %}
+{%   if hostvars[host].get('kubekey', {}).get('master') %}
+    - {{ hostvars[host].ansible_host }}
+{%   endif %}
+{% endfor %}
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    enabled: true
+    scheme: http
+    interval: 30s
+    metricRelabelings: []
+    relabelings: []
+
+kubeScheduler:
+  service:
+    port: 10259
+    targetPort: 10259
+  serviceMonitor:
+    enabled: true
+    https: true
+    insecureSkipVerify: true
+
+kubeProxy:
+  service:
+    port: 10249
+    targetPort: 10249
+  serviceMonitor:
+    enabled: true
+
+kubelet:
+  enabled: true
+  namespace: kube-system
+  serviceMonitor:
+    enabled: true
+
+prometheus:
+  ingress:
+    enabled: false
+  
+
+  # prometheusSpec:
+  #   affinity:
+  #     nodeAffinity:
+  #       requiredDuringSchedulingIgnoredDuringExecution:
+  #         nodeSelectorTerms:
+  #           - matchExpressions:
+  #               - key: kubernetes.io/hostname
+  #                 operator: In
+  #                 values:
+  #                   - worker1
+
+    retention: 30d
+    secrets:
+      - etcd-client-cert
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: openebs-hostpath
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    resources:
+      limits:
+        cpu: 100m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: true
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubeControllerManager: true
+    kubelet: true
+    kubeProxy: true
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeSchedulerAlerting: true
+    kubeSchedulerRecording: true
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true

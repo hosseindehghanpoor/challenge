@@ -1,0 +1,20 @@
+
+#these two rules are just used inorder to make tasks executions safe
+- name: Ensure Ansible version is correct
+  assert:
+    that:
+      - ansible_version.full is version('2.18.7', '==')
+    fail_msg: "This playbook requires Ansible 2.18.7. You have {{ ansible_version.full }}."
+    success_msg: "Ansible version check passed."
+
+- name: Get Python version
+  command: python3 --version
+  register: python_ver
+  changed_when: false
+
+- name: Ensure Python version is correct
+  assert:
+    that:
+      - python_ver.stdout is search('3\\.13\\.5')
+    fail_msg: "This playbook requires Python 3.13.5. You have {{ python_ver.stdout }}."
+    success_msg: "Python version check passed."

@@ -1,0 +1,85 @@
+#here we prepare os for kubernetes installation
+- name: let keep all repos update
+  ansible.builtin.apt:
+    update_cache: yes
+#here we prepare os for kubernetes installation
+- name: make sure conntrack is installed
+  ansible.builtin.package:
+    name: conntrack
+    state: present
+#here we prepare os for kubernetes installation
+- name: make sure socat is installed
+  ansible.builtin.package:
+    name: socat
+    state: present
+#kubernetes is created at this taslk
+- name: creating kubernetes cluster using template file
+  shell: "./kk create cluster -f kube-cluster.yaml -y"
+  args:
+    chdir: "/root/kubekey"
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#it important to watch kubernetes pods to be ready and the continue.
+- name: lets wait and make sure every component is in running mode in kube-system namespace
+  shell: |
+    kubectl get pods -n kube-system --no-headers \
+    | awk '{print $3}' \
+    | grep -vE 'Running|Completed' \
+    | wc -l
+  register: not_ready_pods
+  retries: 30
+  delay: 10
+  until: not_ready_pods.stdout | int == 0
+  changed_when: false
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#this is for being safe and check if all nodes are able to communicate
+- name: lets make sure that calico controller manager is up and running
+  shell: |
+    kubectl -n kube-system get deploy calico-kube-controllers -o json \
+    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+  register: wait_for_calico_operator
+  retries: 20
+  delay: 20
+  until: wait_for_calico_operator.rc == 0
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+#this is for being safe and check if all pods are able to make dns request
+- name: lets make sure that coredns is up and running
+  shell: |
+    kubectl -n kube-system get deploy coredns -o json \
+    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+  register: wait_for_coredns
+  retries: 20
+  delay: 20
+  until: wait_for_coredns.rc == 0
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#here openebs is installed and it is mainly used for local database storage
+- name: Installing OpenEBS Helm chart for local storage
+  shell: |
+    helm repo add openebs https://openebs.github.io/charts
+    helm repo update
+    helm upgrade --install openebs --namespace openebs openebs/openebs --create-namespace
+  register: openebs_helm_installation
+  retries: 20
+  delay: 20
+  until: openebs_helm_installation.rc == 0
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#database operator is installed in this task
+- name: Installing cloudnative pg db operator to manage db clusters
+  shell: |
+    kubectl apply -f \
+      https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.20/releases/cnpg-1.20.6.yaml
+  register: cloudnativepg_installation
+  retries: 20
+  delay: 20
+  until: cloudnativepg_installation.rc == 0
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#it is important to wait for the operator of the db to up and accessible
+- name: Wait for CNPG operator deployment to be ready
+  shell: |
+    kubectl -n cnpg-system get deploy cnpg-controller-manager -o json \
+    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+  register: wait_for_operator
+  retries: 20
+  delay: 20
+  until: wait_for_operator.rc == 0
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)

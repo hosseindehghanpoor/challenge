@@ -1,0 +1,173 @@
+---
+#here we get all the dataviews
+- name: Check existing Kibana data views
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/data_views"
+    method: GET
+    return_content: yes
+    force_basic_auth: yes
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    status_code: 200
+    validate_certs: no
+  register: kibana_data_views
+  when: hostvars[inventory_hostname].master | default(false)
+#here filebeat* is created only if it does not exists before
+- name: Create filebeat* data view if it does not exist
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/data_views/data_view"
+    method: POST
+    return_content: yes
+    body: >
+      {
+        "data_view": {
+          "title": "filebeat*",
+          "timeFieldName": "@timestamp"
+        }
+      }
+    body_format: json
+    headers:
+      kbn-xsrf: "ansible"
+    force_basic_auth: yes
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    status_code: 200
+    validate_certs: no
+  when: >
+    (hostvars[inventory_hostname].master | default(false)) and
+    (kibana_data_views.json.data_view is undefined or
+     (kibana_data_views.json.data_view | selectattr('title', 'equalto', 'filebeat*') | list | length) == 0)
+  register: create_data_view_result
+#again we get data views for its id
+- name: Get Kibana data views
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/data_views"
+    method: GET
+    headers:
+      kbn-xsrf: "true"
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: yes
+    return_content: yes
+  register: kibana_data_views
+  when: hostvars[inventory_hostname].master | default(false)
+#dataview id is extracted for future tasks
+- name: Extract filebeat* data view ID
+  set_fact:
+    filebeat_data_view_id: "{{ (kibana_data_views.json.data_view | selectattr('title', 'equalto', 'filebeat*') | list)[0].id }}"
+  when: hostvars[inventory_hostname].master | default(false)
+#all deployment names are fetched
+- name: Get deployments using jq
+  shell: |
+    kubectl get deployments -A -o json | jq -r '.items[].metadata.name'
+  register: deployment_list
+  changed_when: false
+  when: hostvars[inventory_hostname].master | default(false)
+#here we check if each deployment has already filter
+- name: Check if saved search exists for each deployment
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/saved_objects/_find?type=search&search_fields=title&search={{ item }}"
+    method: GET
+    headers:
+      kbn-xsrf: "true"
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: yes
+    return_content: yes
+    status_code: 200
+  register: search_check_results
+  loop: "{{ deployment_list.stdout_lines }}"
+  when: hostvars[inventory_hostname].master | default(false)
+#here we extact the count of filters for each deployment
+- name: Build deployment search count mapping
+  set_fact:
+    deployment_search_count: "{{ dict(deployment_list.stdout_lines | zip(
+      search_check_results.results | map(attribute='json.total') | list)) }}"
+  when: hostvars[inventory_hostname].master | default(false)
+#here filters will be created
+- name: Create Kibana saved search for each deployment if not exists
+  vars:
+    search_source:
+      index: "{{ filebeat_data_view_id }}"
+      query:
+        query: "kubernetes.deployment.name: {{ item }}"
+        language: "kuery"
+      filter: []
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/saved_objects/search"
+    method: POST
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      attributes:
+        title: "{{ item }}"
+        description: "Logs from {{ item }} deployment"
+        columns: ["@timestamp", "kubernetes.node.hostname", "kubernetes.namespace", "kubernetes.pod.name", "message"]
+        kibanaSavedObjectMeta:
+          searchSourceJSON: "{{ search_source | to_json }}"
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: yes
+  loop: "{{ deployment_list.stdout_lines }}"
+  when:
+    - hostvars[inventory_hostname].master | default(false)
+    - deployment_search_count[item] | default(0) == 0
+#here a simple dashboard code will be used to create the dashboard
+- name: Prepare dashboard template
+  set_fact:
+    dashboard_id: "3ae56950-75e1-11f0-963b-d1f0acab4ac5"
+    dashboard_template: |
+      {"attributes":{"description":"","hits":0,"kibanaSavedObjectMeta":{"searchSourceJSON":"{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[{\"meta\":{\"type\":\"exists\",\"key\":\"kubernetes.pod.name\",\"disabled\":false,\"negate\":false,\"alias\":null,\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.filter[0].meta.index\"},\"query\":{\"exists\":{\"field\":\"kubernetes.pod.name\"}},\"$state\":{\"store\":\"appState\"}}]}"},"optionsJSON":"{\"useMargins\":true,\"syncColors\":false,\"syncTooltips\":false,\"hidePanelTitles\":false}","panelsJSON":"[{\"version\":\"8.5.1\",\"type\":\"lens\",\"gridData\":{\"x\":0,\"y\":0,\"w\":14,\"h\":8,\"i\":\"d78f77ae-698c-4a32-a1c4-91b4d8dc9581\"},\"panelIndex\":\"d78f77ae-698c-4a32-a1c4-91b4d8dc9581\",\"embeddableConfig\":{\"attributes\":{\"title\":\"\",\"visualizationType\":\"lnsLegacyMetric\",\"type\":\"lens\",\"references\":[{\"type\":\"index-pattern\",\"id\":\"FILEBEAT_DATA_VIEW_ID\",\"name\":\"indexpattern-datasource-layer-1f1b5c9c-a855-482c-a85c-e166d7a6c097\"}],\"state\":{\"visualization\":{\"layerId\":\"1f1b5c9c-a855-482c-a85c-e166d7a6c097\",\"accessor\":\"98996bad-1f70-4f7f-beb2-0b1a28f77dd9\",\"layerType\":\"data\"},\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filters\":[],\"datasourceStates\":{\"indexpattern\":{\"layers\":{\"1f1b5c9c-a855-482c-a85c-e166d7a6c097\":{\"columns\":{\"98996bad-1f70-4f7f-beb2-0b1a28f77dd9\":{\"label\":\"Unique count of kubernetes.pod.name\",\"dataType\":\"number\",\"operationType\":\"unique_count\",\"scale\":\"ratio\",\"sourceField\":\"kubernetes.pod.name\",\"isBucketed\":false,\"params\":{\"emptyAsNull\":true}}},\"columnOrder\":[\"98996bad-1f70-4f7f-beb2-0b1a28f77dd9\"],\"incompleteColumns\":{}}}}},\"internalReferences\":[],\"adHocDataViews\":{}}},\"hidePanelTitles\":false,\"enhancements\":{}},\"title\":\"Total Pods\"},{\"version\":\"8.5.1\",\"type\":\"lens\",\"gridData\":{\"x\":14,\"y\":0,\"w\":13,\"h\":8,\"i\":\"1bba8fee-fd85-49d7-bddc-ea788c066114\"},\"panelIndex\":\"1bba8fee-fd85-49d7-bddc-ea788c066114\",\"embeddableConfig\":{\"attributes\":{\"title\":\"\",\"visualizationType\":\"lnsLegacyMetric\",\"type\":\"lens\",\"references\":[{\"type\":\"index-pattern\",\"id\":\"FILEBEAT_DATA_VIEW_ID\",\"name\":\"indexpattern-datasource-layer-b4c38881-9390-4d1d-a5d6-a29a3fa50505\"}],\"state\":{\"visualization\":{\"layerId\":\"b4c38881-9390-4d1d-a5d6-a29a3fa50505\",\"accessor\":\"8efb5cc4-2d35-403b-a789-64177be8bd63\",\"layerType\":\"data\"},\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filters\":[],\"datasourceStates\":{\"indexpattern\":{\"layers\":{\"b4c38881-9390-4d1d-a5d6-a29a3fa50505\":{\"columns\":{\"8efb5cc4-2d35-403b-a789-64177be8bd63\":{\"label\":\"Total Logs\",\"customLabel\":true,\"dataType\":\"number\",\"operationType\":\"count\",\"isBucketed\":false,\"scale\":\"ratio\",\"sourceField\":\"___records___\",\"params\":{\"emptyAsNull\":true}}},\"columnOrder\":[\"8efb5cc4-2d35-403b-a789-64177be8bd63\"],\"incompleteColumns\":{}}}}},\"internalReferences\":[],\"adHocDataViews\":{}}},\"enhancements\":{}}}]","timeRestore":false,"title":"dash","version":1},"coreMigrationVersion":"8.5.1","id":"3ae56950-75e1-11f0-963b-d1f0acab4ac4","migrationVersion":{"dashboard":"8.5.0"},"references":[{"id":"FILEBEAT_DATA_VIEW_ID","name":"kibanaSavedObjectMeta.searchSourceJSON.filter[0].meta.index","type":"index-pattern"},{"id":"FILEBEAT_DATA_VIEW_ID","name":"d78f77ae-698c-4a32-a1c4-91b4d8dc9581:indexpattern-datasource-layer-1f1b5c9c-a855-482c-a85c-e166d7a6c097","type":"index-pattern"},{"id":"FILEBEAT_DATA_VIEW_ID","name":"1bba8fee-fd85-49d7-bddc-ea788c066114:indexpattern-datasource-layer-b4c38881-9390-4d1d-a5d6-a29a3fa50505","type":"index-pattern"}],"type":"dashboard","updated_at":"2025-08-10T11:57:46.478Z","version":"WzI1NzUsMl0="}
+  when: hostvars[inventory_hostname].master | default(false)
+
+- name: Generate parsed dashboard with dynamic data view ID
+  set_fact:
+    dashboard_parsed: "{{ (dashboard_template | replace('FILEBEAT_DATA_VIEW_ID', filebeat_data_view_id)) | from_json }}"
+  when: hostvars[inventory_hostname].master | default(false)
+
+- name: Extract dashboard attributes
+  set_fact:
+    dashboard_attributes: "{{ dashboard_parsed.attributes }}"
+  when: hostvars[inventory_hostname].master | default(false)
+
+- name: Extract dashboard references
+  set_fact:
+    dashboard_references: "{{ dashboard_parsed.references }}"
+  when: hostvars[inventory_hostname].master | default(false)
+
+- name: Check if dashboard exists
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/saved_objects/dashboard/{{ dashboard_id }}"
+    method: GET
+    headers:
+      kbn-xsrf: "true"
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: yes
+    status_code: 200,404
+  register: dashboard_check
+  when: hostvars[inventory_hostname].master | default(false)
+- name: Show dashboard check status
+  debug:
+    msg: "Dashboard status code: {{ dashboard_check.status }}"
+  when: hostvars[inventory_hostname].master | default(false)
+
+- name: Create Kibana dashboard
+  uri:
+    url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ kibana_port }}/api/saved_objects/dashboard/{{ dashboard_id }}?overwrite=false"
+    method: POST
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      attributes: "{{ dashboard_attributes | to_json }}"
+      references: "{{ dashboard_references }}"
+    user: "{{ kibana_user }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: yes
+  when:
+    - hostvars[inventory_hostname].master | default(false)
+    - dashboard_check.status == 404

@@ -1,0 +1,64 @@
+---
+- name: Lets first check your environment
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - 01-environmentCheck
+
+- name: Provisioning VMs with terraform (using Vcenter credentials)
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - 02-terraform
+
+- name: lets create prerequisites files and dicts
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - 03-preCluster
+
+- name: lets transfer files and ssh operations
+  hosts: all
+  gather_facts: false
+  roles:
+    - 04-preClusterFileOps
+
+- name: lets init k8s cluster and openebs and cnpg db operator
+  hosts: all
+  gather_facts: false
+  roles:
+    - 05-initCluster
+
+- name: lets init database cluster
+  hosts: all
+  gather_facts: false
+  roles:
+    - 06-initDBCluster
+
+- name: lets sync files
+  hosts: all
+  become: true
+  gather_facts: false
+  roles:
+    - 07-elk-sync-files
+
+- name: lets install elk cluster
+  hosts: all
+  become: true
+  gather_facts: false
+  roles:
+    - 08-elk
+
+- name: lets install elk cluster
+  hosts: all
+  become: true
+  gather_facts: false
+  roles:
+    - 09-kibana-initialization
+
+- name: lets install prometheus stack
+  hosts: all
+  become: true
+  gather_facts: false
+  roles:
+    - 10-initPrometheusStack

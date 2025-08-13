@@ -1,0 +1,29 @@
+#database files which are the secrets and cluster configuration are now copied.
+- name: Copy dbCluster resources
+  ansible.builtin.synchronize:
+    src: "{{ role_path }}/files/cluster"
+    dest: /root/dbCluster
+    recursive: yes
+    rsync_opts:
+      - "--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#here we need to make sure the namespace for database is exists
+- name: Check if db namespace exists
+  shell: kubectl get ns db
+  register: ns_check
+  ignore_errors: true
+  changed_when: false
+  failed_when: false
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+#if namespace is not exists then we need to create it
+- name: Create db namespace if not exists
+  shell: kubectl create ns db
+  when:
+    - hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+    - ns_check.rc != 0
+#database cluster is created here
+- name: Apply CNPG cluster manifest
+  shell: kubectl apply -f .
+  args:
+    chdir: "/root/dbCluster/cluster"
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)

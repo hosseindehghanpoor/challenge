@@ -1,0 +1,108 @@
+---
+#here we are creating tfvars which they will be used to create VMs from
+#all these vars are important
+- name: Write Terraform variables file
+  copy:
+    dest: "{{ role_path }}/files/terraform_output/terraform_{{ item }}.tfvars"
+    content: |
+      user           = "{{ hostvars[item].user }}"
+      password       = "{{ hostvars[item].password }}"
+      vsphere_server = "{{ hostvars[item].vsphere_server }}"
+      datacenter     = "{{ hostvars[item].datacenter }}"
+      datastore      = "{{ hostvars[item].datastore }}"
+      resource_pool  = "{{ hostvars[item].resource_pool }}"
+      name           = "{{ hostvars[item].name }}"
+      template       = "{{ hostvars[item].template }}"
+      network        = "{{ hostvars[item].network }}"
+      cpus           = "{{ hostvars[item].num_cpus }}"
+      memory         = "{{ hostvars[item].memory }}"
+      cloud_init_file= "{{ hostvars[item].cloud_init_file }}"
+      disk_size      = "{{ hostvars[item].disk_size }}"
+  loop: "{{ groups['all'] }}"
+#here we check if terraform is already initialized and prevent to initialize on every job run
+- name: Check if Terraform providers are already initialized
+  stat:
+    path: "{{ role_path }}/files/terraform_output/.terraform"
+  register: terraform_init_check
+# here we init terrraform if .terraform file does not exists
+- name: Run Terraform init for each VM
+  command: terraform init
+  args:
+    chdir: "{{ role_path }}/files/terraform_output/"
+  when: not terraform_init_check.stat.exists
+#here different plan is created for each vm
+- name: Run Terraform plan for each VM
+  command: >
+    terraform plan -var-file=terraform_{{ item }}.tfvars -out={{ item }}.tfplan 
+  args:
+    chdir: "{{ role_path }}/files/terraform_output"
+  register: terraform_plan
+  with_items: "{{ groups['all'] }}"
+  ignore_errors: true
+#here we check if tfstate exists then set a var for next task
+- name: Check if tfstate exists for each VM
+  stat:
+    path: "{{ role_path }}/files/terraform_output/{{ item }}.tfstate"
+  loop: "{{ groups['all'] }}"
+  register: tfstate_check
+  loop_control:
+    index_var: ansible_index
+#here we apply the files using terraform inorder to create the vms
+- name: Run Terraform apply for each VM only if plan succeeded and tfstate is absent
+  command: terraform apply -auto-approve -state={{ item }}.tfstate {{ item }}.tfplan
+  args:
+    chdir: "{{ role_path }}/files/terraform_output"
+  loop: "{{ groups['all'] }}"
+  loop_control:
+    index_var: ansible_index
+  when:
+    - terraform_plan.results[ansible_index].rc == 0
+    - not tfstate_check.results[ansible_index].stat.exists
+  register: terraform_apply
+# - name: Run Terraform apply for each VM
+#   command: terraform apply -auto-approve -state={{ item }}.tfstate {{ item }}.tfplan
+#   args:
+#     chdir: "{{ role_path }}/files/terraform_output"
+#   when: terraform_plan.results[ansible_index].rc == 0
+#   loop_control:
+#     index_var: ansible_index
+#   with_items: "{{ groups['all'] }}"
+#   creates: "{{ item }}.tfstate"
+
+#this dictionary is createed to capture the ips which are exists in tfstate files. tfstate files are very important for all future tasks
+- name: Initialize vm_ips dictionary
+  set_fact:
+    vm_ips: {}
+- name: Get IP addresses of VMs
+  command: terraform output -json -state={{ item }}.tfstate
+  args:
+    chdir: "{{ role_path }}/files/terraform_output"
+  register: terraform_output
+  loop: "{{ groups['all'] }}"
+#here vm_ips are set
+- name: Store IP addresses in vm_ips dictionary
+  set_fact:
+    vm_ips: "{{ vm_ips | combine({ item: (terraform_output.results[ansible_index].stdout | from_json).vm_ip.value }) }}"
+    cacheable: true
+  loop: "{{ groups['all'] }}"
+  loop_control:
+    index_var: ansible_index
+  when: terraform_output.results[ansible_index].stdout | default('') != ''
+#just a simple debug   
+- name: Debug VM IP addresses
+  debug:
+    msg: "IP address of {{ item }} is {{ vm_ips[item] }}"
+  loop: "{{ groups['all'] }}"
+
+- name: Save IP addresses to a file
+  copy:
+    content: "{{ vm_ips | to_nice_yaml }}"
+    dest: "{{ role_path }}/files/vm_ips.yml"
+
+- name: Re-add hosts with ansible_host from vm_ips using add_host
+  add_host:
+    hostname: "{{ item }}"
+    ansible_host: "{{ vm_ips[item] }}"
+  loop: "{{ groups['all'] }}"
+  when: item in vm_ips
+  delegate_to: localhost
