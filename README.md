@@ -1,4 +1,4 @@
-# In the Name of God
+# CHALLENGE
 
 # Project Overview
 
