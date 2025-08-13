@@ -1,5 +1,12 @@
 
 #these two rules are just used inorder to make tasks executions safe
+- name: Ensure private key file has correct permissions (600)
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/files/iac"
+    mode: '0600'
+    owner: "{{ ansible_user_id | default(lookup('env', 'USER')) }}"
+  delegate_to: localhost
+  run_once: true
 - name: Ensure Ansible version is correct
   assert:
     that:
