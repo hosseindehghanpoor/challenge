@@ -118,7 +118,7 @@ kubeControllerManager:
 kubeEtcd:
   enabled: true
   endpoints:
-    - 192.168.168.237
+    - 192.168.168.252
   service:
     enabled: true
     port: 2381
@@ -157,7 +157,10 @@ prometheus:
     enabled: false
   
 
-  # prometheusSpec:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: true
+
   #   affinity:
   #     nodeAffinity:
   #       requiredDuringSchedulingIgnoredDuringExecution:

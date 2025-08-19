@@ -19,7 +19,11 @@
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
 #downloaded file will be extracted
 - name: untar downloaded file
-  ansible.builtin.command: tar -xzf /root/kubekey.tar.gz -C /root
+  ansible.builtin.unarchive:
+    src: /root/kubekey.tar.gz
+    dest: /root/
+    remote_src: yes
+    creates: /root/kubekey
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
 #here the file of the kubernetes cluster config copied
 - name: copy created template kube-cluster.yaml to server (overwrite if exists)

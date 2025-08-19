@@ -1,14 +1,14 @@
 #cloud-config
 
 # sets the hostname to 'terraformed'
-hostname: ansible-vm-3
+hostname: ansibel-vm3
 disable_root: false
 users:
 # Adds a user called 'example' with the password hash of 'passwort', sudo rights and the default ubuntu groups
-        - name: example3
+        - name: example
           passwd: $6$rounds=4096$P0uvlB9.8nsiY67$uuOxYSk6n/74Ds3JtV1mT6xYjOguwTWgNmOeHvcHiQa9zan57l8dvfHE/zlu19fDmJGySNzLmh6K0R2I1AU9o0
           lock_passwd: false
-          sudo: ALL=(ALL) ALL
+          sudo: ALL=(ALL:ALL) ALL
           groups: [adm, audio, cdrom, dialout, floppy, video, plugdev, dip, netdev]
           ssh_authorized_keys:
             - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNwJWX9jkhpYoF9lC2Ijn8adi1ll1c1yIxkf6MgrwcY this is for IaC"
@@ -31,4 +31,3 @@ package_upgrade: true
 packages:
   - socat
   - conntrack
-

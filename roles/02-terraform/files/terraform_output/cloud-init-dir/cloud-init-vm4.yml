@@ -1,7 +1,7 @@
 #cloud-config
 
 # sets the hostname to 'terraformed'
-hostname: ansibel-vm1
+hostname: ansibel-vm4
 disable_root: false
 users:
 # Adds a user called 'example' with the password hash of 'passwort', sudo rights and the default ubuntu groups

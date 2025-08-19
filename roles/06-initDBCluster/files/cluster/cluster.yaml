@@ -40,6 +40,6 @@ spec:
   storage:
     storageClass: openebs-hostpath
     size: 10Gi
-      #  monitoring:
-    #    enablePodMonitor: true
+  monitoring:
+    enablePodMonitor: true
 

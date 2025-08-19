@@ -5,20 +5,26 @@ metadata:
 spec:
   hosts:
   - name: vm1
-    address: 192.168.168.237
-    internalAddress: 192.168.168.237
+    address: 192.168.168.252
+    internalAddress: 192.168.168.252
     user: root
     password: root
     port: 22
   - name: vm2
-    address: 192.168.168.238
-    internalAddress: 192.168.168.238
+    address: 192.168.168.148
+    internalAddress: 192.168.168.148
     user: root
     password: root
     port: 22
   - name: vm3
-    address: 192.168.168.239
-    internalAddress: 192.168.168.239
+    address: 192.168.168.253
+    internalAddress: 192.168.168.253
+    user: root
+    password: root
+    port: 22
+  - name: vm4
+    address: 192.168.168.153
+    internalAddress: 192.168.168.153
     user: root
     password: root
     port: 22
@@ -30,6 +36,7 @@ spec:
     worker:
     - vm2
     - vm3
+    - vm4
   controlPlaneEndpoint:
     domain: lb.kubesphere.local
     address: ""

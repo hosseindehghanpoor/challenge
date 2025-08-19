@@ -18,7 +18,22 @@ etcd_source_host: "{{ groups['master'][0] | default('master1') }}"
 etcd_service_name: "etcd"
 etcd_listen_metrics_urls: "http://0.0.0.0:2381"
 #telegram bot which is used to send alerts
-bot_token: 8370696025:AAEXbsoYRsGiUe7zi4qfvVk6anCEtOH7EIo
+bot_token: XXXXXXXX
 chat_id: -1002747305613
 #grafana nodeport
 grafana_nodePort: "32351"
+grafana_adminPassword: YqjVQnpzceRPZMSN4UpXsdqwdq2myqppgwp2FK
+
+user: "XXXXXX" # vSphere User
+password: "XXXXXX" # vSphere Password
+vsphere_server: "XXXXXX" # vSphere URL
+datacenter: "zimafarda" # vSphere datacenter
+datastore: "SSD - 223 - Server" # vSphere datastore
+resource_pool: "RS2" # vSphere Resourcepool
+template: "ubuntu24-template" # chosen name of the template
+network: "VM Network" # network for the VM to reside in
+ssh_port: 22
+ansible_port: 22
+ansible_ssh_private_key_file: "{{ playbook_dir  }}/files/iac"
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no -P 22'
+#ansible_python_interpreter: /usr/bin/python3.12

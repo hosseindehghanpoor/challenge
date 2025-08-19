@@ -19,8 +19,7 @@
 #its important to have up and running elk because of the future tasks
 - name: Lets wait until ELK is readyy
   ansible.builtin.shell: |
-    kubectl get statefulset elasticsearch-master -n elastic-system -o json \ 
-    | jq -e 'select(.status.availableReplicas == 1 and .status.readyReplicas == 1)'
+    kubectl rollout status sts -n elastic-system elasticsearch-master --timeout 5m
   register: elk_status
   changed_when: false
   failed_when: false
@@ -38,8 +37,7 @@
 #here we check if kibana is already installed
 - name: check if kibana is already installed and ready
   ansible.builtin.shell: |
-    kubectl get deployments -n elastic-system kibana-kibana -o json \
-    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+    kubectl rollout status deployment -n elastic-system kibana-kibana
   register: kibana_status
   changed_when: false
   failed_when: false
@@ -55,8 +53,7 @@
 #here we check if kibana is up because it is important to future tasks
 - name: Lets wait until Kibana is readyy
   ansible.builtin.shell: |
-    kubectl get deployments -n elastic-system kibana-kibana -o json \
-    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+    kubectl rollout status deployment -n elastic-system kibana-kibana --timeout 5m
   register: kibana_status
   until: kibana_status.rc == 0
   retries: 30

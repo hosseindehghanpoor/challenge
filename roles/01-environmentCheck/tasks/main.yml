@@ -1,17 +1,10 @@
 
 #these two rules are just used inorder to make tasks executions safe
-- name: Ensure private key file has correct permissions (600)
-  ansible.builtin.file:
-    path: "{{ playbook_dir }}/files/iac"
-    mode: '0600'
-    owner: "{{ ansible_user_id | default(lookup('env', 'USER')) }}"
-  delegate_to: localhost
-  run_once: true
 - name: Ensure Ansible version is correct
   assert:
     that:
-      - ansible_version.full is version('2.18.7', '==')
-    fail_msg: "This playbook requires Ansible 2.18.7. You have {{ ansible_version.full }}."
+      - ansible_version.full is version('2.18.8', '==')
+    fail_msg: "This playbook requires Ansible 2.18.8. You have {{ ansible_version.full }}."
     success_msg: "Ansible version check passed."
 
 - name: Get Python version
@@ -22,6 +15,6 @@
 - name: Ensure Python version is correct
   assert:
     that:
-      - python_ver.stdout is search('3\\.13\\.5')
-    fail_msg: "This playbook requires Python 3.13.5. You have {{ python_ver.stdout }}."
+      - python_ver.stdout is search('3\\.13\\.7')
+    fail_msg: "This playbook requires Python 3.13.7. You have {{ python_ver.stdout }}."
     success_msg: "Python version check passed."

@@ -1,24 +1,10 @@
 all:
-  vars:
-    user: "XXXXX@vcenter.sivan.local" # vSphere User
-    password: "XXXXXXXX" # vSphere Password
-    vsphere_server: "vcenter.XXXX.local" # vSphere URL
-    datacenter: "XXXXXX" # vSphere datacenter
-    datastore: "XXXXX" # vSphere datastore
-    resource_pool: "XXX" # vSphere Resourcepool
-    template: "ubuntu24-template" # chosen name of the template
-    network: "VM Network" # network for the VM to reside in
-    ssh_port: 22
-    ansible_port: 22
-    ansible_ssh_private_key_file: "{{ playbook_dir  }}/files/iac"
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -P 22'
-    #ansible_python_interpreter: /usr/bin/python3.12
   hosts:
     vm1:
       name: "vm1"
       cloud_init_file: "./cloud-init-dir/cloud-init-vm1.yml"
       num_cpus: 3
-      memory: 3072
+      memory: 4096
       master: true
       disk_size: 30
       kubekey:
@@ -31,7 +17,7 @@ all:
       name: "vm2"
       cloud_init_file: "./cloud-init-dir/cloud-init-vm2.yml"
       num_cpus: 3
-      memory: 3072
+      memory: 4096
       disk_size: 30
       kubekey:
         address: ""
@@ -43,7 +29,19 @@ all:
       name: "vm3"
       cloud_init_file: "./cloud-init-dir/cloud-init-vm3.yml"
       num_cpus: 3
-      memory: 3072
+      memory: 4096
+      disk_size: 30
+      kubekey:
+        address: ""
+        internalAddress: ""
+        user: root
+        pass: root
+        worker: true
+    vm4:
+      name: "vm4"
+      cloud_init_file: "./cloud-init-dir/cloud-init-vm4.yml"
+      num_cpus: 3
+      memory: 4096
       disk_size: 30
       kubekey:
         address: ""

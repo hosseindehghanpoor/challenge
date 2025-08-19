@@ -1,39 +1,31 @@
-# General vCenter data
-# vCenter / ESXi Username
+# vCenter connection
 variable "user" {}
-
-# vCenter / ESXi Password
 variable "password" {}
-
-# vCenter / ESXi Endpoint
 variable "vsphere_server" {}
 
-# vCenter / ESXi Datacenter
+# vCenter topology defaults
 variable "datacenter" {}
-
-# vCenter / ESXi Datastore
 variable "datastore" {}
-
-# vCenter / ESXi ResourcePool
 variable "resource_pool" {}
-
-# Virtual Machine configuration
-# VM Name
-variable "name" {}
-
-# Name of OVA template (chosen in import process)
 variable "template" {}
-
-# VM Network 
 variable "network" {}
 
-# VM Number of CPU's
-variable "cpus" {}
-
-# VM Memory in MB
-variable "memory" {}
-variable "cloud_init_file" {}
+# Default disk size (used when per-VM disk_size omitted)
 variable "disk_size" {
-  type        = number
-  default     = 50
+  type    = number
+  default = 50
+}
+
+# Primary new variable: list of VMs to create.
+# Each item is a map with keys:
+#   name (required)
+#   cpus (number or string, e.g. 2 or "2")
+#   memory (MB) (number or string)
+#   cloud_init_file (path to cloud-init YAML)
+# Optional per-VM overrides:
+#   disk_size, template, network
+variable "vms" {
+  type        = list(map(any))
+  description = "List of VM definitions. Each map must include 'name', 'cpus', 'memory', and 'cloud_init_file'. Optional: disk_size, template, network."
+  default     = []
 }

@@ -87,7 +87,7 @@ alertmanager:
 
 grafana:
   defaultDashboardsTimezone: Asia/Tehran
-  adminPassword: YqjVQnpzceRPZMSN4UpXsdqwdq2myqppgwp2FK
+  adminPassword: {{ grafana_adminPassword }}
   initChownData:
     enabled: false
   ingress:
@@ -163,7 +163,10 @@ prometheus:
     enabled: false
   
 
-  # prometheusSpec:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: true
+
   #   affinity:
   #     nodeAffinity:
   #       requiredDuringSchedulingIgnoredDuringExecution:

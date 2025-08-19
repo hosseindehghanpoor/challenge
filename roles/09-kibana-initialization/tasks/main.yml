@@ -11,6 +11,9 @@
     status_code: 200
     validate_certs: no
   register: kibana_data_views
+  until: kibana_data_views.status == 200
+  retries: 20
+  delay: 10
   when: hostvars[inventory_hostname].master | default(false)
 #here filebeat* is created only if it does not exists before
 - name: Create filebeat* data view if it does not exist

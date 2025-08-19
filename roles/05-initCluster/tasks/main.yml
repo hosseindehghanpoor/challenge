@@ -31,11 +31,11 @@
   until: not_ready_pods.stdout | int == 0
   changed_when: false
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
 #this is for being safe and check if all nodes are able to communicate
 - name: lets make sure that calico controller manager is up and running
   shell: |
-    kubectl -n kube-system get deploy calico-kube-controllers -o json \
-    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+    kubectl rollout status deployment -n kube-system calico-kube-controllers --timeout 5m
   register: wait_for_calico_operator
   retries: 20
   delay: 20
@@ -45,13 +45,13 @@
 #this is for being safe and check if all pods are able to make dns request
 - name: lets make sure that coredns is up and running
   shell: |
-    kubectl -n kube-system get deploy coredns -o json \
-    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+    kubectl rollout status deployment -n kube-system coredns --timeout 5m
   register: wait_for_coredns
   retries: 20
   delay: 20
   until: wait_for_coredns.rc == 0
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
 #here openebs is installed and it is mainly used for local database storage
 - name: Installing OpenEBS Helm chart for local storage
   shell: |
@@ -63,6 +63,7 @@
   delay: 20
   until: openebs_helm_installation.rc == 0
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
 #database operator is installed in this task
 - name: Installing cloudnative pg db operator to manage db clusters
   shell: |
@@ -73,13 +74,49 @@
   delay: 20
   until: cloudnativepg_installation.rc == 0
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
 #it is important to wait for the operator of the db to up and accessible
 - name: Wait for CNPG operator deployment to be ready
   shell: |
-    kubectl -n cnpg-system get deploy cnpg-controller-manager -o json \
-    | jq -e '.status.conditions[] | select(.type == "Available" and .status == "True")'
+    kubectl rollout status deployment -n cnpg-system cnpg-controller-manager --timeout 5m
   register: wait_for_operator
   retries: 20
   delay: 20
   until: wait_for_operator.rc == 0
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+# lets handle kubectl auto completion
+- name: installing kubectl auto completion
+  shell: |
+    kubectl completion bash > ~/.kube/completion.bash.inc
+    printf "source '$HOME/.kube/completion.bash.inc'\n" > $HOME/.bash_profile
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+# installing krew 
+- name: installing krew
+  shell: |
+    (
+      set -x; cd "$(mktemp -d)" &&
+      OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+      ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" &&
+      KREW="krew-${OS}_${ARCH}" &&
+      curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+      tar zxvf "${KREW}.tar.gz" &&
+      ./"${KREW}" install krew
+    )
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+# addding krew to bash
+- name: adding krew to bash
+  shell: |
+    printf "export PATH='${KREW_ROOT:-$HOME/.krew}/bin:$PATH'\n" >> $HOME/.bash_profile
+  when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
+
+# installing cnpg plugin for kubectl
+- name: installing cnpg plugin for kubectl
+  shell: |
+    export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+    kubectl krew install cnpg
+  args:
+    executable: /bin/bash
   when: hostvars['localhost'].kubekeys[inventory_hostname].master | default(false)
